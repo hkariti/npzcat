@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+import sys
+import argparse
+import zipfile
+import itertools
+
+import numpy as np
+
+
+def summarize_npy(npy):
+    version = np.lib.format.read_magic(npy)
+    shape, _, dtype = np.lib.format._read_array_header(npy, version)
+
+    return shape, dtype
+
+def npz_headers(npz):
+    """
+    Takes a path to an .npz file, which is a Zip archive of .npy files.
+    Generates a sequence of (name, shape, np.dtype).
+    """
+    with zipfile.ZipFile(npz) as archive:
+        for name in archive.namelist():
+            if not name.endswith('.npy'):
+                continue
+
+            npy = archive.open(name)
+            shape, dtype = summarize_npy(npy)
+            yield name[:-4], shape, dtype
+ 
+
+def print_summary(entries):
+    def print_row(values, column_widths):
+        for i, value in enumerate(values):
+            print(str(value).ljust(column_widths[i]), end='\t')
+        print()
+    entries = list(entries)
+    column_widths = [max(len(str(row[i])) for row in entries) for i in range(len(entries[0]))]
+    if len(entries[0]) == 2:
+        column_widths = [1] + column_widths
+    headers = ['Entry', 'Shape', 'Type']
+    print_row(headers, column_widths)
+    for entry in entries:
+        if len(entry) == 2:
+            row = ['-'] + list(entry)
+        else:
+            row = entry
+        print_row(row, column_widths)
+
+def print_entries(fd, dumped_entries=[]):
+    fd.seek(0)
+    npz_npy = np.load(fd, allow_pickle=True)
+    if isinstance(npz_npy, np.ndarray): # npy file
+        print("Contents:")
+        print(npz_npy)
+        return
+
+    printed_entries = 0
+    for name in npz_npy.keys():
+        if dumped_entries and name not in dumped_entries:
+            continue
+        if printed_entries != 0:
+            print("---------")
+        print(f"Contents of {name}:")
+        print(npz_npy[name])
+        printed_entries += 1
+
+def main():
+    parser = argparse.ArgumentParser(description="Describe contents of npz and npy files")
+
+    # Add arguments
+    parser.add_argument("input_file", nargs='+', help="Path to the input file")
+    parser.add_argument("-s", "--summary", action='store_true', default=True, help="Summarize file: entries, shapes and types (default)")
+    parser.add_argument("-S", "--no-summary", action='store_false', dest='summary', help="Don't summarize objects (disable -s)")
+    parser.add_argument("-d", "--dump", type=str, nargs='?', metavar="ENTRIES", help="Dump values of entries (separate by commas, leave blank for all)")
+    parser.add_argument("-l", "--long-dump", action='store_true', dest='long', help="Don't truncate dumped values")
+
+    # Parse the command-line arguments
+    args = parser.parse_args()
+    if args.long:
+        np.set_printoptions(threshold=np.inf)
+    if args.dump:
+        dumped_entries = args.dump.split(',')
+    else:
+        dumped_entries = None
+
+    for f in args.input_file:
+        if f.endswith('.npy'):
+            fd = open(f, 'rb')
+            summary = [summarize_npy(fd)]
+            dumped_entries = []
+        elif f.endswith('.npz'):
+            fd = open(f, 'rb')
+            summary = npz_headers(f)
+        else:
+            print("{sys.argv[0]}: {f}: file is neither npy nor npz, skipping", file=sys.stderr)
+            continue
+
+        if len(args.input_file) > 1:
+            print("** {f} **")
+        if args.summary:
+            print_summary(summary)
+        if dumped_entries is not None:
+            if args.summary:
+                print()
+            print_entries(fd, dumped_entries)
+
+if __name__ == '__main__':
+    main()
