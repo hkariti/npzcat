@@ -1,12 +1,10 @@
 # npzcat - look in NumPy files from the CLI
 
-This is a utility for reading the contents of .npz and .npy files from the CLI.
-
-The default operation is a summary of the contents. This works quickly on very large files too (based on a nice [SO answer](https://stackoverflow.com/a/68224674/949487)).
-
-Requires a python environment that has `numpy`.
+This is a utility for reading the contents of .npz and .npy files from the CLI. Requires a python environment that has `numpy`.
 
 ## Usage
+
+The default operation is a summary of the contents. This works quickly on very large files too (based on a nice [SO answer](https://stackoverflow.com/a/68224674/949487)):
 
 ```
 $ time npz over_1gb_file.npz
